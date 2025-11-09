@@ -55,14 +55,28 @@ class UsbDevice:
                 continue
             yield UsbDevice(
                 path=Path(devname),
-                vendor_id=properties["ID_USB_VENDOR_ID"],
-                vendor=properties["ID_USB_VENDOR"],
-                model_id=properties["ID_USB_MODEL_ID"],
-                model=properties["ID_USB_MODEL"],
-                serial=(
-                    properties.get("ID_USB_SERIAL_SHORT") or properties["ID_USB_SERIAL"]
+                # not all devices have all properties, so we fall back to alt names, which
+                # prevents a traceback from the missing property.
+                vendor_id=get_property(
+                    properties, "ID_USB_VENDOR_ID", "ID_VENDOR_ID"
                 ),
-                is_tty=properties["SUBSYSTEM"] == "tty",
+                vendor=get_property(
+                    properties, "ID_USB_VENDOR", "ID_VENDOR", "ID_VENDOR_FROM_DATABASE"
+                ),
+                model_id=get_property(properties, "ID_USB_MODEL_ID", "ID_MODEL_ID"),
+                model=get_property(
+                    properties, "ID_USB_MODEL", "ID_MODEL", "ID_MODEL_FROM_DATABASE"
+                ),
+                serial=(
+                    properties.get("ID_USB_SERIAL_SHORT")
+                    or get_property(
+                        properties,
+                        "ID_USB_SERIAL",
+                        "ID_SERIAL_SHORT",
+                        "ID_SERIAL",
+                    )
+                ),
+                is_tty=properties.get("SUBSYSTEM") == "tty",
                 partition_label=properties.get("ID_FS_LABEL"),
             )
 
@@ -78,3 +92,13 @@ def parse_properties(entry: str) -> dict[str, str]:
         key, value = line.split("=", maxsplit=1)
         properties[key] = value
     return properties
+
+
+def get_property(
+    properties: dict[str, str], *keys: str, default: str = "unknown"
+) -> str:
+    """Return the first present property from `keys`, falling back to `default`."""
+    for key in keys:
+        if value := properties.get(key):
+            return value
+    return default
